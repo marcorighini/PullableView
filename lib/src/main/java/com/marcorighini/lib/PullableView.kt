@@ -13,25 +13,24 @@ import android.view.ViewConfiguration
 import android.widget.FrameLayout
 import com.marcorighini.lib.*
 import timber.log.Timber
-import android.graphics.Rect
 
 
 class PullableView : FrameLayout {
-    private val ySlope: Int = ViewConfiguration.get(context).scaledTouchSlop
-    lateinit var startArea: StartArea
-    lateinit var scrollOffsetLimit: ScrollOffsetLimit
-    lateinit var scrollOffsetThreshold: ScrollOffsetThreshold
+    private val slope: Int = ViewConfiguration.get(context).scaledTouchSlop
+    lateinit var anchorOffset: AnchorOffset
+    lateinit var scrollThreshold: ScrollThreshold
     var direction: Direction
     var boundViews = listOf<BoundView>()
     var listener: PullListener? = null
     private var downX: Int = 0
     private var downY: Int = 0
+    private var animationRunning = false
+    private var snapped: Boolean = false
 
     interface PullListener {
-        val isPullable: Boolean
-        fun onResetToStart()
+        fun onReset()
         fun onPullStart()
-        fun onSnapToEnd()
+        fun onSnap()
     }
 
     constructor(context: Context?) : this(context, null)
@@ -40,37 +39,22 @@ class PullableView : FrameLayout {
     constructor(context: Context?, attrs: AttributeSet?, defStyleAttr: Int, defStyleRes: Int) : super(context, attrs, defStyleAttr, defStyleRes) {
         val displayMetrics = DisplayMetrics()
         (context as Activity).windowManager.defaultDisplay.getMetrics(displayMetrics)
-
         val typedArray = context.theme.obtainStyledAttributes(attrs, R.styleable.PullableView, 0, 0)
         direction = Direction.from(typedArray.getInt(R.styleable.PullableView_direction, Direction.BOTH.value))
 
         addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
-            val r = Rect()
-            v.getGlobalVisibleRect(r)
-            val x = r.left
-            val y = r.top
-
-            startArea = StartArea(typedArray.getInteger(R.styleable.PullableView_startAreaMinX, x),
-                    typedArray.getInteger(R.styleable.PullableView_startAreaMinY, y),
-                    typedArray.getInteger(R.styleable.PullableView_startAreaMaxX, x + v.width),
-                    typedArray.getInteger(R.styleable.PullableView_startAreaMaxY, y + v.height))
-            scrollOffsetLimit = ScrollOffsetLimit(typedArray.getInteger(R.styleable.PullableView_scrollMin, -startArea.minY),
-                    typedArray.getInteger(R.styleable.PullableView_scrollMax, displayMetrics.heightPixels - startArea.maxY))
-            scrollOffsetThreshold = ScrollOffsetThreshold(typedArray.getInteger(R.styleable.PullableView_scrollThresholdMin, scrollOffsetLimit.min / 2),
-                    typedArray.getInteger(R.styleable.PullableView_scrollThresholdMax, scrollOffsetLimit.max / 2))
+            anchorOffset = AnchorOffset(typedArray.getInteger(R.styleable.PullableView_anchorOffsetUp, -v.top),
+                    typedArray.getInteger(R.styleable.PullableView_anchorOffsetDown, displayMetrics.heightPixels - v.bottom))
+            scrollThreshold = ScrollThreshold(typedArray.getInteger(R.styleable.PullableView_scrollThresholdUp, anchorOffset.up / 2),
+                    typedArray.getInteger(R.styleable.PullableView_scrollThresholdDown, anchorOffset.down / 2))
         }
     }
-
-
-    private var snappingToLimit = false
-    private var animationRunning = false
-    private var lockOnSnap: Boolean = false
 
     override fun onInterceptTouchEvent(event: MotionEvent): Boolean {
         Timber.d("onInterceptTouchEvent")
         var consumed = false
 
-        if (isPullable) {
+        if (isPullable()) {
             when (MotionEventCompat.getActionMasked(event)) {
                 MotionEvent.ACTION_DOWN -> onDown(event)
                 MotionEvent.ACTION_MOVE -> {
@@ -86,26 +70,25 @@ class PullableView : FrameLayout {
         return consumed
     }
 
-    private val isPullable: Boolean
-        get() {
-            val isPullable = !animationRunning && (!lockOnSnap || !snappingToLimit) && (listener != null && listener!!.isPullable || listener == null)
-            Timber.d("isPullable %b", isPullable)
-            return isPullable
-        }
+    fun isPullable(): Boolean {
+        val isPullable = !animationRunning && !snapped
+        Timber.d("isPullable=%b", isPullable)
+        return isPullable
+    }
 
     private fun onDown(event: MotionEvent) {
         downY = event.rawY.toInt()
         downX = event.rawX.toInt()
-        Timber.d("onDown: downY=%d startArea=%s", downY, startArea)
+        Timber.d("onDown: downY=%d", downY)
     }
 
     private fun checkMoveInterception(event: MotionEvent): Boolean {
         val y = event.rawY.toInt()
         val x = event.rawX.toInt()
-        Timber.d("checkMoveInterception: y=%d downY=%d startArea=%s", y, downY, startArea)
+        Timber.d("checkMoveInterception: y=%d downY=%d", y, downY)
         val moveX = Math.abs(x - downX)
         val moveY = y - downY
-        return event.pointerCount == 1 && startArea.inBounds(x, y) && isOverSlope(moveY, ySlope, direction) && isVerticalMovement(moveY, moveX, 1.73f)
+        return event.pointerCount == 1 && isOverSlope(moveY, slope, direction) && isVerticalMovement(moveY, moveX, 1.73f)
     }
 
     private fun isVerticalMovement(yMove: Int, xMove: Int, ratio: Float): Boolean = Math.abs(yMove) / (if (xMove == 0) 1 else xMove) > ratio
@@ -115,20 +98,20 @@ class PullableView : FrameLayout {
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         Timber.d("onTouchEvent")
-        if (isPullable) {
+        if (isPullable()) {
             val currentMoveY = event.rawY.toInt() - downY
 
             when (MotionEventCompat.getActionMasked(event)) {
                 MotionEvent.ACTION_DOWN -> onDown(event)
                 MotionEvent.ACTION_MOVE ->
-                    if (checkMove(currentMoveY, direction, scrollOffsetLimit)) {
+                    if (checkMove(currentMoveY, direction, anchorOffset)) {
                         Timber.d("Apply transformations")
-                        boundViews.forEach { v -> v.transform(currentMoveY, scrollOffsetLimit) }
+                        boundViews.forEach { v -> v.transform(currentMoveY, anchorOffset) }
                     }
                 MotionEvent.ACTION_UP -> {
-                    Timber.d("ActionUp: y=%f downY=%d scrollOffsetThreshold=%s", y, downY, scrollOffsetThreshold)
-                    if (isOverThreshold(currentMoveY, direction, scrollOffsetThreshold)) {
-                        snapToLimit()
+                    Timber.d("ActionUp: y=%f downY=%d scrollThreshold=%s", y, downY, scrollThreshold)
+                    if (isOverThreshold(currentMoveY, direction, scrollThreshold)) {
+                        snap()
                     } else {
                         resetAnimated()
                     }
@@ -141,15 +124,15 @@ class PullableView : FrameLayout {
         return false
     }
 
-    private fun checkMove(moveY: Int, direction: Direction, scrollOffsetLimit: ScrollOffsetLimit): Boolean {
-        Timber.d("checkMove: moveY=%d direction=%s scrollOffsetLimit=%s", moveY, direction, scrollOffsetLimit)
-        return (direction.upEnabled() && moveY < 0 && moveY >= scrollOffsetLimit.min)
-                || (direction.downEnabled() && moveY > 0 && moveY <= scrollOffsetLimit.max)
+    private fun checkMove(moveY: Int, direction: Direction, anchorOffset: AnchorOffset): Boolean {
+        Timber.d("checkMove: moveY=%d direction=%s anchorOffset=%s", moveY, direction, anchorOffset)
+        return (direction.upEnabled() && moveY < 0 && moveY >= anchorOffset.up)
+                || (direction.downEnabled() && moveY > 0 && moveY <= anchorOffset.down)
     }
 
-    private fun isOverThreshold(moveY: Int, direction: Direction, scrollOffsetThreshold: ScrollOffsetThreshold) =
-            (direction.upEnabled() && moveY < scrollOffsetThreshold.min) ||
-                    (direction.downEnabled() && moveY > scrollOffsetThreshold.max)
+    private fun isOverThreshold(moveY: Int, direction: Direction, scrollThreshold: ScrollThreshold) =
+            (direction.upEnabled() && moveY < scrollThreshold.up) ||
+                    (direction.downEnabled() && moveY > scrollThreshold.down)
 
     fun resetAnimated() {
         Timber.d("resetAnimated: animationRunning=%b", animationRunning)
@@ -157,17 +140,18 @@ class PullableView : FrameLayout {
             animationRunning = true
             boundViews.forEach { it.view.isClickable = false }
             AnimatorSet().apply {
-                playTogether(boundViews.flatMap { it.getAnimators(scrollOffsetLimit, 0.0f) })
+                playTogether(boundViews.flatMap { it.getAnimators(anchorOffset, 0.0f) })
                 addListener(object : AnimatorListenerAdapter() {
                     override fun onAnimationStart(animation: Animator) {
                         Timber.d("resetStart animation started")
                     }
 
                     override fun onAnimationEnd(animation: Animator) {
+                        Timber.d("resetStart animation end")
                         boundViews.forEach { it.view.isClickable = true }
                         animationRunning = false
-                        listener?.onResetToStart()
-                        Timber.d("resetStart animation end")
+                        snapped = false
+                        listener?.onReset()
                     }
                 })
             }.start()
@@ -177,27 +161,29 @@ class PullableView : FrameLayout {
     fun resetImmediate() {
         Timber.d("resetImmediate: animationRunning=%b", animationRunning)
         if (!animationRunning) {
-            boundViews.forEach { v -> v.transform(0, scrollOffsetLimit) }
-            listener?.onResetToStart()
+            boundViews.forEach { v -> v.transform(0, anchorOffset) }
+            snapped = false
+            listener?.onReset()
         }
     }
 
-    fun snapToLimit() {
-        Timber.d("snapToLimit: animationRunning=%b", animationRunning)
+    fun snap() {
+        Timber.d("snap: animationRunning=%b", animationRunning)
         if (!animationRunning) {
             animationRunning = true
             boundViews.forEach { it.view.isClickable = false }
             AnimatorSet().apply {
-                playTogether(boundViews.flatMap { it.getAnimators(scrollOffsetLimit, 1.0f) })
+                playTogether(boundViews.flatMap { it.getAnimators(anchorOffset, 1.0f) })
                 addListener(object : AnimatorListenerAdapter() {
                     override fun onAnimationStart(animation: Animator) {
-                        Timber.d("snapToLimit animation start")
+                        Timber.d("snap animation start")
                     }
 
                     override fun onAnimationEnd(animation: Animator) {
+                        Timber.d("snap animation end")
                         animationRunning = false
-                        listener?.onSnapToEnd()
-                        Timber.d("snapToLimit animation end")
+                        snapped = true
+                        listener?.onSnap()
                     }
                 })
             }.start()
