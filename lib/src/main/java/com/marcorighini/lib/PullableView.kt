@@ -70,7 +70,7 @@ class PullableView : FrameLayout {
         return consumed
     }
 
-    fun isPullable(): Boolean {
+    private fun isPullable(): Boolean {
         val isPullable = !animationRunning && !snapped
         Timber.d("isPullable=%b", isPullable)
         return isPullable
