@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <declare-styleable name="PullableView">
+        <attr name="startAreaMinX" format="integer"/>
+        <attr name="startAreaMinY" format="integer"/>
+        <attr name="startAreaMaxX" format="integer"/>
+        <attr name="startAreaMaxY" format="integer"/>
+        <attr name="scrollMin" format="integer"/>
+        <attr name="scrollMax" format="integer"/>
+        <attr name="scrollThresholdMin" format="integer"/>
+        <attr name="scrollThresholdMax" format="integer"/>
+        <attr name="direction" format="enum">
+            <enum name="UP" value="0"/>
+            <enum name="DOWN" value="1"/>
+            <enum name="BOTH" value="2"/>
+        </attr>
+    </declare-styleable>
+</resources>
