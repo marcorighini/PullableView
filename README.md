@@ -3,6 +3,9 @@ Enhanced Pull-To-Action layout
 
 [![](https://jitpack.io/v/marcorighini/PullableView.svg)](https://jitpack.io/#marcorighini/PullableView)
 
+## Demo
+![demo](https://github.com/marcorighini/PullableView/blob/master/demo.gif "Demo")
+
 ## Dependency
 Add this in your root `build.gradle` file (**not** your module `build.gradle` file):
 
