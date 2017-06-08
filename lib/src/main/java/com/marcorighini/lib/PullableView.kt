@@ -30,7 +30,7 @@ class PullableView : FrameLayout {
     interface PullListener {
         fun onReset()
         fun onPullStart()
-        fun onSnap()
+        fun onAnchor()
     }
 
     constructor(context: Context?) : this(context, null)
@@ -111,7 +111,7 @@ class PullableView : FrameLayout {
                 MotionEvent.ACTION_UP -> {
                     Timber.d("ActionUp: y=%f downY=%d scrollThreshold=%s", y, downY, scrollThreshold)
                     if (isOverThreshold(currentMoveY, direction, scrollThreshold)) {
-                        snap()
+                        anchor()
                     } else {
                         resetAnimated()
                     }
@@ -167,8 +167,8 @@ class PullableView : FrameLayout {
         }
     }
 
-    fun snap() {
-        Timber.d("snap: animationRunning=%b", animationRunning)
+    fun anchor() {
+        Timber.d("anchor: animationRunning=%b", animationRunning)
         if (!animationRunning) {
             animationRunning = true
             boundViews.forEach { it.view.isClickable = false }
@@ -176,14 +176,14 @@ class PullableView : FrameLayout {
                 playTogether(boundViews.flatMap { it.getAnimators(anchorOffset, 1.0f) })
                 addListener(object : AnimatorListenerAdapter() {
                     override fun onAnimationStart(animation: Animator) {
-                        Timber.d("snap animation start")
+                        Timber.d("anchor animation start")
                     }
 
                     override fun onAnimationEnd(animation: Animator) {
-                        Timber.d("snap animation end")
+                        Timber.d("anchor animation end")
                         animationRunning = false
                         snapped = true
-                        listener?.onSnap()
+                        listener?.onAnchor()
                     }
                 })
             }.start()

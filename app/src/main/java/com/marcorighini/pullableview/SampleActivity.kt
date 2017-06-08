@@ -21,8 +21,9 @@ class SampleActivity : AppCompatActivity() {
                 BoundView(binding.transleable, listOf(TranslateTransformation()))
         )
         binding.pullableView.listener = object: PullableView.PullListener{
-            override fun onSnap() {
-                Timber.d("onSnap()")
+            override fun onAnchor() {
+                Timber.d("onAnchor()")
+                binding.pullableView.postDelayed({ binding.pullableView.resetAnimated() }, 3000)
             }
 
             override fun onPullStart() {
