@@ -3,8 +3,8 @@ package com.marcorighini.pullableview
 import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
 import android.databinding.DataBindingUtil
-import com.cynny.cynny.misc.views.PullableView
 import com.marcorighini.lib.BoundView
+import com.marcorighini.lib.PullableView
 import com.marcorighini.lib.anim.AlphaTransformation
 import com.marcorighini.lib.anim.TranslateTransformation
 import com.marcorighini.pullableview.databinding.ActivitySampleBinding

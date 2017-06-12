@@ -1,4 +1,4 @@
-package com.cynny.cynny.misc.views
+package com.marcorighini.lib
 
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter

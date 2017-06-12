@@ -30,12 +30,12 @@ dependencies {
 There is a [sample](https://github.com/marcorighini/PullableView/tree/master/app) provided which shows how to use the library. For completeness, here is all that is required to get PullableView working:
 
 ```xml
-<com.cynny.cynny.misc.views.PullableView
+<com.marcorighini.lib.PullableView
     android:id="@+id/pullable_view"
     android:layout_width="match_parent"
     android:layout_height="wrap_content">
     ....
-</com.cynny.cynny.misc.views.PullableView>
+</com.marcorighini.lib.PullableView>
 ```
 
 ## Attributes
